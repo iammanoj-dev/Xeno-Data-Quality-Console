@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { ValidationRule, ProcessedFile, defaultRules, processDataset, generateDemoData } from './processor';
+import { ValidationRule, ProcessedFile, CountryRule, defaultRules, processDataset, generateDemoData } from './processor';
 import Papa from 'papaparse';
 
 interface DataContextType {
@@ -21,6 +21,10 @@ interface DataContextType {
     countryStats: Record<string, number>;
     dailyUploads: Record<string, number>;
   };
+  countryRules: CountryRule[];
+  addCountryRule: (rule: Omit<CountryRule, 'id'>) => void;
+  updateCountryRule: (id: string, rule: Partial<CountryRule>) => void;
+  deleteCountryRule: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -28,21 +32,42 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export function DataProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<ProcessedFile[]>([]);
   const [validationRules, setValidationRules] = useState<ValidationRule[]>(defaultRules);
+  const [countryRules, setCountryRules] = useState<CountryRule[]>([
+    { id: '1', country: 'India', code: 'IN', phone: 10, format: 'YYYY-MM-DD' },
+    { id: '2', country: 'Singapore', code: 'SG', phone: 8, format: 'YYYY-MM-DD' },
+    { id: '3', country: 'UAE', code: 'AE', phone: 9, format: 'DD/MM/YYYY' },
+    { id: '4', country: 'USA', code: 'US', phone: 10, format: 'MM-DD-YYYY' },
+    { id: '5', country: 'UK', code: 'GB', phone: 10, format: 'DD/MM/YYYY' },
+  ]);
+
+  const addCountryRule = (rule: Omit<CountryRule, 'id'>) => {
+    setCountryRules(prev => [...prev, { ...rule, id: Math.random().toString(36).substring(2, 9) }]);
+  };
+
+  const updateCountryRule = (id: string, rule: Partial<CountryRule>) => {
+    setCountryRules(prev => prev.map(r => r.id === id ? { ...r, ...rule } : r));
+  };
+
+  const deleteCountryRule = (id: string) => {
+    setCountryRules(prev => prev.filter(r => r.id !== id));
+  };
 
   const CHUNK_SIZE = 10000;
 
   const handleDataChunking = (data: any[], filename: string) => {
     const globalContext = { orderIds: new Set<string>() };
     if (data.length <= CHUNK_SIZE) {
-      const processed = processDataset(data, validationRules, filename, globalContext);
+      const processed = processDataset(data, validationRules, filename, globalContext, countryRules);
       setFiles(prev => [processed, ...prev]);
     } else {
       const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
       const newFiles = [];
       for (let i = 0; i < totalChunks; i++) {
-        const chunk = data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        const chunkName = `${filename.replace('.csv', '')}_part${i + 1}.csv`;
-        const processed = processDataset(chunk, validationRules, chunkName, globalContext);
+        const chunkData = data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const chunkFilename = `${filename.replace('.csv', '')}_part${i + 1}.csv`;
+        
+        // Process each chunk sequentially
+        const processed = processDataset(chunkData, validationRules, chunkFilename, globalContext, countryRules);
         newFiles.push(processed);
       }
       setFiles(prev => [...newFiles.reverse(), ...prev]);
@@ -142,6 +167,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       downloadCSV,
       clearAll,
       aggregatedStats: getAggregatedStats(),
+      countryRules,
+      addCountryRule,
+      updateCountryRule,
+      deleteCountryRule,
     }}>
       {children}
     </DataContext.Provider>

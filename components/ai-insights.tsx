@@ -164,42 +164,47 @@ export default function AIInsights() {
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col">
           <div className="p-5 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600" /> Validation Summary
+              <Sparkles className="w-4 h-4 text-blue-600" /> Executive AI Report
             </h3>
-            <button 
-              onClick={handleDownloadPDF}
-              className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-2"
-            >
-              <Sparkles className="w-3.5 h-3.5" /> Generate Summary
-            </button>
           </div>
-          <div className="p-6 flex-1">
-            <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="p-6 flex-1 flex flex-col justify-center">
+            <div className="bg-blue-50/50 p-5 rounded-lg border border-blue-100 relative">
+              <Sparkles className="absolute top-4 left-4 w-4 h-4 text-blue-400" />
+              <p className="text-sm text-gray-700 leading-relaxed pl-6">
+                {(() => {
+                  const errorsCount = latestFile.totalRecords - latestFile.validRecordsCount;
+                  const errorRate = ((errorsCount / latestFile.totalRecords) * 100).toFixed(1);
+                  
+                  let summary = `The dataset "${latestFile.name}" contains ${latestFile.totalRecords.toLocaleString()} records, maintaining a quality score of ${latestFile.qualityScore}%. `;
+                  
+                  if (errorsCount === 0) {
+                    summary += `The data is perfectly clean with a 0% error rate. No critical anomalies or systemic issues were detected.`;
+                  } else {
+                    summary += `Approximately ${errorRate}% of the records (${errorsCount.toLocaleString()} rows) failed validation. `;
+                    
+                    if (topIssues.length > 0) {
+                      summary += `The primary systemic issue detected is "${topIssues[0][0]}", which accounts for ${topIssues[0][1]} errors. `;
+                    }
+                    
+                    if (mostAffectedCountry !== 'None') {
+                      summary += `Geographically, "${mostAffectedCountry}" is the most affected region requiring immediate remediation.`;
+                    }
+                  }
+                  
+                  return summary;
+                })()}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-6">
               <div className="bg-gray-50 p-4 rounded border border-gray-100">
                 <div className="text-[10px] font-bold text-gray-500 tracking-wide mb-1 uppercase">Records Processed</div>
-                <div className="text-2xl font-bold text-gray-900">{latestFile.totalRecords}</div>
+                <div className="text-2xl font-bold text-gray-900">{latestFile.totalRecords.toLocaleString()}</div>
               </div>
               <div className="bg-gray-50 p-4 rounded border border-gray-100">
-                <div className="text-[10px] font-bold text-gray-500 tracking-wide mb-1 uppercase">Records with errors</div>
-                <div className="text-2xl font-bold text-red-600">{latestFile.totalRecords - latestFile.validRecordsCount}</div>
+                <div className="text-[10px] font-bold text-gray-500 tracking-wide mb-1 uppercase">Errors Detected</div>
+                <div className="text-2xl font-bold text-red-600">{(latestFile.totalRecords - latestFile.validRecordsCount).toLocaleString()}</div>
               </div>
             </div>
-
-            <h4 className="text-xs font-bold text-gray-900 mb-3">Top Issues:</h4>
-            <div className="space-y-3">
-              {topIssues.length > 0 ? (
-                topIssues.map(([issue, count], idx) => (
-                  <div key={idx} className="flex justify-between border-b border-dashed border-gray-200 pb-2">
-                    <span className="text-sm text-gray-600">{issue}</span>
-                    <span className="text-sm font-bold text-gray-900">{count}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-gray-500 italic">No issues detected! 🎉</div>
-              )}
-            </div>
-
-            <p className="text-xs text-gray-500 mt-4">Most affected country: <span className="font-bold text-gray-900">{mostAffectedCountry}</span></p>
           </div>
         </div>
       </div>

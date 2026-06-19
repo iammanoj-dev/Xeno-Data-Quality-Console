@@ -1,10 +1,16 @@
 'use client'
 
-import { FileText, Download } from 'lucide-react'
+import React, { useState } from 'react'
+import { FileText, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { useData } from '@/lib/data-context'
 
 export default function ProcessedFiles() {
   const { files, downloadCSV } = useData();
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const groupedFiles = Object.values(files.reduce((acc: Record<string, any>, file) => {
     const baseName = file.name.replace(/_part\d+\.csv$/, '.csv');
@@ -17,7 +23,9 @@ export default function ProcessedFiles() {
         validRecordsCount: 0,
         validData: [],
         errorData: [],
-        chunkCount: 0
+        errors: [],
+        chunkCount: 0,
+        chunks: []
       };
     }
     const group = acc[baseName];
@@ -25,7 +33,9 @@ export default function ProcessedFiles() {
     group.validRecordsCount += file.validRecordsCount;
     group.validData.push(...file.validData);
     group.errorData.push(...file.errorData);
+    group.errors.push(...file.errors);
     group.chunkCount += 1;
+    group.chunks.push(file);
     return acc;
   }, {})).map((group: any) => ({
     ...group,
@@ -59,38 +69,78 @@ export default function ProcessedFiles() {
                 </tr>
               ) : (
                 groupedFiles.map((file: any) => (
-                  <tr key={file.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-gray-900">
-                      {file.name} {file.chunkCount > 1 && <span className="text-xs font-normal text-gray-500 ml-2">({file.chunkCount} chunks joined)</span>}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 font-medium">{file.processedAt.toLocaleString()}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{file.validRecordsCount} / {file.totalRecords}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{file.qualityScore}%</td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => {
-                          const hasInvalid = file.validData.some((row: any) => !row.customer_id || String(row.customer_id).trim() === '');
-                          if (hasInvalid) {
-                            throw new Error("Validation breach: cleaned dataset contains invalid records");
-                          }
-                          downloadCSV(file.validData, `cleaned_${file.name}`);
-                        }}
-                        disabled={file.validRecordsCount === 0}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Cleaned
-                      </button>
-                      <button 
-                        onClick={() => downloadCSV(file.errorData, `errors_${file.name}`)}
-                        disabled={file.errorData.length === 0}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Errors
-                      </button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={file.id}>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
+                        {file.chunkCount > 1 && (
+                          <button onClick={() => toggleRow(file.id)} className="text-gray-400 hover:text-gray-600">
+                            {expandedRows[file.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          </button>
+                        )}
+                        {file.name} {file.chunkCount > 1 && <span className="text-xs font-normal text-gray-500 ml-2">({file.chunkCount} chunks)</span>}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 font-medium">{file.processedAt.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">{file.validRecordsCount} / {file.totalRecords}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">{file.qualityScore}%</td>
+                      <td className="px-6 py-4 text-right space-x-2">
+                        <button 
+                          onClick={() => downloadCSV(file.errors, `validation_log_${file.name}`)}
+                          disabled={file.errors.length === 0}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Log
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const hasInvalid = file.validData.some((row: any) => !row.customer_id || String(row.customer_id).trim() === '');
+                            if (hasInvalid) throw new Error("Validation breach");
+                            downloadCSV(file.validData, `cleaned_${file.name}`);
+                          }}
+                          disabled={file.validRecordsCount === 0}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Cleaned
+                        </button>
+                        <button 
+                          onClick={() => downloadCSV(file.errorData, `errors_${file.name}`)}
+                          disabled={file.errorData.length === 0}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Errors
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedRows[file.id] && file.chunks.map((chunk: any) => (
+                      <tr key={chunk.id} className="bg-gray-50/30 border-b border-gray-100/50">
+                        <td className="px-6 py-3 pl-12 text-sm text-gray-600 flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5 text-gray-400" />
+                          {chunk.name}
+                        </td>
+                        <td className="px-6 py-3 text-gray-500 text-xs">{chunk.processedAt.toLocaleString()}</td>
+                        <td className="px-6 py-3 text-gray-600 text-sm">{chunk.validRecordsCount} / {chunk.totalRecords}</td>
+                        <td className="px-6 py-3 text-gray-600 text-sm">{chunk.qualityScore}%</td>
+                        <td className="px-6 py-3 text-right space-x-2">
+                          <button 
+                            onClick={() => downloadCSV(chunk.validData, `cleaned_${chunk.name}`)}
+                            disabled={chunk.validRecordsCount === 0}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <Download className="w-3 h-3" /> Cleaned
+                          </button>
+                          <button 
+                            onClick={() => downloadCSV(chunk.errorData, `errors_${chunk.name}`)}
+                            disabled={chunk.errorData.length === 0}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <Download className="w-3 h-3" /> Errors
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))
               )}
             </tbody>

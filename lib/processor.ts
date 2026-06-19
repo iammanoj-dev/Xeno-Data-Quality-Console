@@ -15,6 +15,14 @@ export interface ValidationError {
   fix: string;
 }
 
+export interface CountryRule {
+  id: string;
+  country: string;
+  code: string;
+  phone: number;
+  format: string;
+}
+
 export interface ProcessedFile {
   id: string;
   name: string;
@@ -44,7 +52,13 @@ export interface ProcessGlobalContext {
   orderIds: Set<string>;
 }
 
-export function processDataset(data: any[], rules: ValidationRule[], filename: string, globalContext?: ProcessGlobalContext): ProcessedFile {
+export function processDataset(
+  data: any[],
+  rules: ValidationRule[],
+  filename: string,
+  globalContext?: { orderIds: Set<string> },
+  countryRules: CountryRule[] = []
+): ProcessedFile {
   const validData: any[] = [];
   const errorData: any[] = [];
   const errors: ValidationError[] = [];
@@ -140,7 +154,7 @@ export function processDataset(data: any[], rules: ValidationRule[], filename: s
 
     // Rule: country
     const countryRule = rules.find(r => r.field === 'country');
-    const validCountries = ['USA', 'India', 'Singapore', 'UAE', 'UK', 'Australia', 'Canada'];
+    const validCountries = countryRules.map(c => c.country);
     if (countryRule?.enabled) {
       if (!row.country) {
          isValidRow = false;
@@ -162,7 +176,14 @@ export function processDataset(data: any[], rules: ValidationRule[], filename: s
     const phoneRule = rules.find(r => r.field === 'phone');
     if (phoneRule?.enabled && row.phone) {
       const phoneStr = String(row.phone).replace(/\D/g, '');
-      if (phoneStr.length < 8 || phoneStr.length > 15) {
+      const matchedCountryRule = countryRules.find(c => c.country === row.country);
+      const expectedLength = matchedCountryRule?.phone;
+      
+      if (expectedLength && phoneStr.length !== expectedLength) {
+        isValidRow = false;
+        rowErrors.push({ row: rowNum, field: 'phone', detected: String(row.phone), fix: `Expected ${expectedLength} digits for ${row.country || 'default'}` });
+        errorStats['Invalid Phone']++;
+      } else if (!expectedLength && (phoneStr.length < 8 || phoneStr.length > 15)) {
         isValidRow = false;
         rowErrors.push({ row: rowNum, field: 'phone', detected: String(row.phone), fix: 'Provide valid phone number' });
         errorStats['Invalid Phone']++;
